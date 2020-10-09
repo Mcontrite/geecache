@@ -14,19 +14,24 @@ var db = map[string]string{
 }
 
 func TestGetter(t *testing.T) {
-	var f Getter = GetterFunc(func(key string) ([]byte, error) {
+	// 借助 CallbackFunc 的类型转换，将一个匿名回调函数转换成接口 Callback
+	var f Callback = CallbackFunc(func(key string) ([]byte, error) {
 		return []byte(key), nil
 	})
-
+	// 调用该接口的方法 f.Get(key string)，实际上就是在调用匿名回调函数
 	expect := []byte("key")
 	if v, _ := f.Get("key"); !reflect.DeepEqual(v, expect) {
 		t.Fatal("callback failed")
 	}
+	// 定义一个函数类型 F，并且实现接口 A 的方法，然后在这个方法中调用自己
+	// 这是 Go 语言中将其他函数（参数返回值定义与 F 一致）转换为接口 A 的常用技巧
+	// 如果不提供这个把函数转换为接口的函数，你调用时就需要创建一个struct
+	// 然后实现对应的接口，创建一个实例作为参数，相比这种方式就麻烦得多了
 }
 
 func TestGet(t *testing.T) {
 	loadCounts := make(map[string]int, len(db))
-	gee := NewGroup("scores", 2<<10, GetterFunc(
+	gee := NewGroup("scores", 2<<10, CallbackFunc(
 		func(key string) ([]byte, error) {
 			log.Println("[SlowDB] search key", key)
 			if v, ok := db[key]; ok {
@@ -55,7 +60,7 @@ func TestGet(t *testing.T) {
 
 func TestGetGroup(t *testing.T) {
 	groupName := "scores"
-	NewGroup(groupName, 2<<10, GetterFunc(
+	NewGroup(groupName, 2<<10, CallbackFunc(
 		func(key string) (bytes []byte, err error) { return }))
 	if group := GetGroup(groupName); group == nil || group.name != groupName {
 		t.Fatalf("group %s not exist", groupName)

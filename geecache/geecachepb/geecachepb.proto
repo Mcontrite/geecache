@@ -14,3 +14,5 @@ message Response {
 service GroupCache {
   rpc Get(Request) returns (Response);
 }
+
+// 使用命令 protoc --go_out=. *.proto 生成 geecache.pb.go

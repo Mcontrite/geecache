@@ -16,6 +16,7 @@ import (
 	"net/http"
 )
 
+// 模拟数据库
 var db = map[string]string{
 	"Tom":  "630",
 	"Jack": "589",
@@ -23,7 +24,7 @@ var db = map[string]string{
 }
 
 func createGroup() *geecache.Group {
-	return geecache.NewGroup("scores", 2<<10, geecache.GetterFunc(
+	return geecache.NewGroup("scores", 2<<10, geecache.CallbackFunc(
 		func(key string) ([]byte, error) {
 			log.Println("[SlowDB] search key", key)
 			if v, ok := db[key]; ok {
@@ -34,7 +35,7 @@ func createGroup() *geecache.Group {
 }
 
 func startCacheServer(addr string, addrs []string, gee *geecache.Group) {
-	peers := geecache.NewHTTPPool(addr)
+	peers := geecache.NewHTTPServer(addr)
 	peers.Set(addrs...)
 	gee.RegisterPeers(peers)
 	log.Println("geecache is running at", addr)
@@ -60,6 +61,7 @@ func startAPIServer(apiAddr string, gee *geecache.Group) {
 }
 
 func main() {
+	// 需要命令行传入 port 和 api 2 个参数，用来在指定端口启动 HTTP 服务
 	var port int
 	var api bool
 	flag.IntVar(&port, "port", 8001, "Geecache server port")
