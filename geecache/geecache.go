@@ -13,21 +13,21 @@ import (
 type Group struct {
 	name      string
 	callback  Callback // 缓存未命中时获取源数据的回调
-	mainCache LockCache
+	lockCache LockCache
 	peers     PeerPicker
 	loader    *singleflight.Group // 确保每个缓存键只查询一次
 }
 
 // 回调函数(callback)，在缓存不存在时，调用这个函数，得到源数据
 type Callback interface {
-	GetCallback(key string) ([]byte, error)
+	CallbackGet(key string) ([]byte, error)
 }
 
 // 定义函数类型
 type CallbackFunc func(key string) ([]byte, error)
 
-// Get implements Callback interface function
-func (f CallbackFunc) GetCallback(key string) ([]byte, error) {
+// 实现 Callback 接口
+func (f CallbackFunc) CallbackGet(key string) ([]byte, error) {
 	return f(key)
 }
 
@@ -36,7 +36,7 @@ var (
 	groups = make(map[string]*Group)
 )
 
-// NewGroup create a new instance of Group
+// 实例化 Group，并将对象保存到全局变量 groups
 func NewGroup(name string, cacheBytes int64, callback Callback) *Group {
 	if callback == nil {
 		panic("nil Callback")
@@ -46,7 +46,7 @@ func NewGroup(name string, cacheBytes int64, callback Callback) *Group {
 	g := &Group{
 		name:      name,
 		callback:  callback,
-		mainCache: LockCache{cacheBytes: cacheBytes},
+		lockCache: LockCache{cacheBytes: cacheBytes},
 		loader:    &singleflight.Group{},
 	}
 	// 将 group 存储在全局变量 groups 中
@@ -67,12 +67,11 @@ func (g *Group) Get(key string) (ByteView, error) {
 	if key == "" {
 		return ByteView{}, fmt.Errorf("key is required")
 	}
-	// 从 mainCache 中查找缓存，如果存在则返回缓存值
-	if v, ok := g.mainCache.get(key); ok {
+	// 从 lockCache 中查找缓存，如果存在则返回缓存值
+	if v, ok := g.lockCache.get(key); ok {
 		log.Println("[GeeCache] hit")
 		return v, nil
 	}
-
 	return g.load(key)
 }
 
@@ -101,7 +100,7 @@ func (g *Group) load(key string) (value ByteView, err error) {
 
 func (g *Group) getLocally(key string) (ByteView, error) {
 	// 调用用户回调函数获取源数据
-	bytes, err := g.callback.GetCallback(key)
+	bytes, err := g.callback.CallbackGet(key)
 	if err != nil {
 		return ByteView{}, err
 
@@ -111,9 +110,9 @@ func (g *Group) getLocally(key string) (ByteView, error) {
 	return value, nil
 }
 
-// 将源数据添加到缓存 mainCache 中
+// 将源数据添加到缓存 lockCache 中
 func (g *Group) populateCache(key string, value ByteView) {
-	g.mainCache.add(key, value)
+	g.lockCache.add(key, value)
 }
 
 // 将实现了 PeerPicker 接口的 HTTPServer 注入到 Group 中
@@ -126,7 +125,7 @@ func (g *Group) RegisterPeers(peers PeerPicker) {
 
 // 从其他节点获取
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
-	// 使用实现了 PeerGetter 接口的 httpGetter 访问远程节点，获取缓存值
+	// 使用实现了 PeerGetter 接口的 httpClient 访问远程节点，获取缓存值
 	req := &pb.Request{
 		Group: g.name,
 		Key:   key,

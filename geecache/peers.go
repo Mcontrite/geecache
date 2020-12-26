@@ -2,7 +2,7 @@ package geecache
 
 import pb "geecache/geecachepb"
 
-// 根据传入的 key 选择相应节点 PeerGetter。
+// 根据传入的 key 选择相应 PeerGetter 节点
 type PeerPicker interface {
 	PickPeer(key string) (peer PeerGetter, ok bool)
 }
